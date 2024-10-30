@@ -91,7 +91,7 @@ class TestForward:
         # shape: (seq_length, batch_size)
         tags = make_tags(crf, seq_length, batch_size)
         # mask should have size of (seq_length, batch_size)
-        mask = torch.tensor([[1, 1, 1], [1, 1, 0]], dtype=torch.uint8).transpose(0, 1)
+        mask = torch.tensor([[1, 1, 1], [1, 1, 0]], dtype=torch.bool).transpose(0, 1)
 
         # shape: ()
         llh = crf(emissions, tags, mask=mask)
@@ -128,7 +128,7 @@ class TestForward:
 
         llh_no_mask = crf(emissions, tags)
         # No mask means the mask is all ones
-        llh_mask = crf(emissions, tags, mask=torch.ones_like(tags).byte())
+        llh_mask = crf(emissions, tags, mask=torch.ones_like(tags).bool())
 
         assert_close(llh_no_mask, llh_mask)
 
@@ -229,7 +229,7 @@ class TestForward:
         # shape: (seq_length, batch_size)
         tags = make_tags(crf, seq_length, batch_size)
         # mask should have size of (seq_length, batch_size)
-        mask = torch.tensor([[1, 1, 1], [1, 1, 0]], dtype=torch.uint8).transpose(0, 1)
+        mask = torch.tensor([[1, 1, 1], [1, 1, 0]], dtype=torch.bool).transpose(0, 1)
 
         llh = crf(emissions, tags, mask=mask, reduction='token_mean')
 
@@ -314,7 +314,7 @@ class TestForward:
     def test_first_timestep_mask_is_not_all_on(self):
         emissions = torch.randn(3, 2, 4)
         tags = torch.empty(3, 2, dtype=torch.long)
-        mask = torch.tensor([[1, 1, 1], [0, 0, 0]], dtype=torch.uint8).transpose(0, 1)
+        mask = torch.tensor([[1, 1, 1], [0, 0, 0]], dtype=torch.bool).transpose(0, 1)
         crf = make_crf(4)
 
         with pytest.raises(ValueError) as excinfo:
@@ -348,7 +348,7 @@ class TestDecode:
         # shape: (seq_length, batch_size, num_tags)
         emissions = make_emissions(crf, seq_length, batch_size)
         # mask should be (seq_length, batch_size)
-        mask = torch.tensor([[1, 1, 1], [1, 1, 0]], dtype=torch.uint8).transpose(0, 1)
+        mask = torch.tensor([[1, 1, 1], [1, 1, 0]], dtype=torch.bool).transpose(0, 1)
 
         best_tags = crf.decode(emissions, mask=mask)
 
@@ -376,7 +376,7 @@ class TestDecode:
         best_tags_no_mask = crf.decode(emissions)
         # No mask means mask is all ones
         best_tags_mask = crf.decode(
-            emissions, mask=emissions.new_ones(emissions.shape[:2]).byte())
+            emissions, mask=emissions.new_ones(emissions.shape[:2]).bool())
 
         assert best_tags_no_mask == best_tags_mask
 
@@ -387,7 +387,7 @@ class TestDecode:
         # shape: (seq_length, batch_size, num_tags)
         emissions = make_emissions(crf, seq_length, batch_size)
         # shape: (seq_length, batch_size)
-        mask = torch.tensor([[1, 1, 1], [1, 1, 0]], dtype=torch.uint8).transpose(0, 1)
+        mask = torch.tensor([[1, 1, 1], [1, 1, 0]], dtype=torch.bool).transpose(0, 1)
 
         batched = crf.decode(emissions, mask=mask)
 
@@ -441,7 +441,7 @@ class TestDecode:
 
     def test_emissions_and_mask_size_mismatch(self):
         emissions = torch.randn(1, 2, 3)
-        mask = torch.tensor([[1, 1], [1, 0]], dtype=torch.uint8)
+        mask = torch.tensor([[1, 1], [1, 0]], dtype=torch.bool)
         crf = make_crf(3)
 
         with pytest.raises(ValueError) as excinfo:
@@ -452,7 +452,7 @@ class TestDecode:
 
     def test_first_timestep_mask_is_not_all_on(self):
         emissions = torch.randn(3, 2, 4)
-        mask = torch.tensor([[1, 1, 1], [0, 0, 0]], dtype=torch.uint8).transpose(0, 1)
+        mask = torch.tensor([[1, 1, 1], [0, 0, 0]], dtype=torch.bool).transpose(0, 1)
         crf = make_crf(4)
 
         with pytest.raises(ValueError) as excinfo:
@@ -498,7 +498,7 @@ class TestTorchScriptForward:
         # shape: (seq_length, batch_size)
         tags = make_tags(crf, seq_length, batch_size)
         # mask should have size of (seq_length, batch_size)
-        mask = torch.tensor([[1, 1, 1], [1, 1, 0]], dtype=torch.uint8).transpose(0, 1)
+        mask = torch.tensor([[1, 1, 1], [1, 1, 0]], dtype=torch.bool).transpose(0, 1)
         llh = crf(emissions, tags, mask=mask)
         llh_scripted = crf_script(emissions, tags, mask=mask)
         assert_close(llh_scripted, llh)
@@ -526,8 +526,8 @@ class TestTorchScriptForward:
         tags = make_tags(crf, seq_length, batch_size)
 
         # No mask means the mask is all ones
-        llh_mask = crf(emissions, tags, mask=torch.ones_like(tags).byte())
-        llh_mask_script = crf_script(emissions, tags, mask=torch.ones_like(tags).byte())
+        llh_mask = crf(emissions, tags, mask=torch.ones_like(tags).bool())
+        llh_mask_script = crf_script(emissions, tags, mask=torch.ones_like(tags).bool())
         assert_close(llh_mask_script, llh_mask)
 
     def test_batched_forward(self):
@@ -578,7 +578,7 @@ class TestTorchScriptForward:
         # shape: (seq_length, batch_size)
         tags = make_tags(crf)
 
-        mask = torch.tensor([[1, 1, 1], [1, 1, 0]], dtype=torch.uint8).transpose(0, 1)
+        mask = torch.tensor([[1, 1, 1], [1, 1, 0]], dtype=torch.bool).transpose(0, 1)
         llh = crf(emissions, tags, mask=mask, reduction='token_mean')
         llh_script = crf_script(emissions, tags, mask=mask, reduction='token_mean')
         assert_close(llh_script, llh)
@@ -620,7 +620,7 @@ class TestTorchScriptDecode:
         # shape: (seq_length, batch_size, num_tags)
         emissions = make_emissions(crf, seq_length, batch_size)
         # mask should be (seq_length, batch_size)
-        mask = torch.tensor([[1, 1, 1], [1, 1, 0]], dtype=torch.uint8).transpose(0, 1)
+        mask = torch.tensor([[1, 1, 1], [1, 1, 0]], dtype=torch.bool).transpose(0, 1)
         best_tags = crf.decode(emissions, mask=mask)
         best_tags_scripted = crf_script.decode(emissions, mask=mask)
         assert best_tags == best_tags_scripted

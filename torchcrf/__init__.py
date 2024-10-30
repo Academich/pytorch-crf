@@ -64,7 +64,7 @@ class CRF(nn.Module):
             self,
             emissions: torch.Tensor,
             tags: torch.LongTensor,
-            mask: Optional[torch.ByteTensor] = None,
+            mask: Optional[torch.BoolTensor] = None,
             reduction: str = 'sum',
     ) -> torch.Tensor:
         """Compute the conditional log likelihood of a sequence of tags given emission scores.
@@ -76,8 +76,9 @@ class CRF(nn.Module):
             tags (`~torch.LongTensor`): Sequence of tags tensor of size
                 ``(seq_length, batch_size)`` if ``batch_first`` is ``False``,
                 ``(batch_size, seq_length)`` otherwise.
-            mask (`~torch.ByteTensor`): Mask tensor of size ``(seq_length, batch_size)``
+            mask (`~torch.BoolTensor`): Mask tensor of size ``(seq_length, batch_size)``
                 if ``batch_first`` is ``False``, ``(batch_size, seq_length)`` otherwise.
+                The True values are unmasked, the False values are masked.
             reduction: Specifies  the reduction to apply to the output:
                 ``none|sum|mean|token_mean``. ``none``: no reduction will be applied.
                 ``sum``: the output will be summed over batches. ``mean``: the output will be
@@ -91,7 +92,7 @@ class CRF(nn.Module):
         if reduction not in ('none', 'sum', 'mean', 'token_mean'):
             raise ValueError(f'invalid reduction: {reduction}')
         if mask is None:
-            mask = torch.ones_like(tags, dtype=torch.uint8)
+            mask = torch.ones_like(tags, dtype=torch.bool)
 
         if self.batch_first:
             emissions = emissions.transpose(0, 1)
@@ -131,7 +132,7 @@ class CRF(nn.Module):
         """
         self._validate(emissions, mask=mask)
         if mask is None:
-            mask = emissions.new_ones(emissions.shape[:2], dtype=torch.uint8)
+            mask = emissions.new_ones(emissions.shape[:2], dtype=torch.bool)
 
         if self.batch_first:
             emissions = emissions.transpose(0, 1)
@@ -143,7 +144,7 @@ class CRF(nn.Module):
             self,
             emissions: torch.Tensor,
             tags: Optional[torch.LongTensor] = None,
-            mask: Optional[torch.ByteTensor] = None) -> None:
+            mask: Optional[torch.BoolTensor] = None) -> None:
         if emissions.dim() != 3:
             raise ValueError(f'emissions must have dimension of 3, got {emissions.dim()}')
         if emissions.size(2) != self.num_tags:
@@ -171,7 +172,7 @@ class CRF(nn.Module):
 
     def _compute_score(
             self, emissions: torch.Tensor, tags: torch.LongTensor,
-            mask: torch.ByteTensor) -> torch.Tensor:
+            mask: torch.BoolTensor) -> torch.Tensor:
         # emissions: (seq_length, batch_size, num_tags)
         # tags: (seq_length, batch_size)
         # mask: (seq_length, batch_size)
@@ -182,7 +183,6 @@ class CRF(nn.Module):
         assert mask[0].all()
 
         seq_length, batch_size = tags.shape
-        mask = mask.type_as(emissions)
 
         tags_range = torch.arange(self.num_tags, device=tags.device)
         batch_range = torch.arange(batch_size, device=tags.device)
@@ -193,7 +193,7 @@ class CRF(nn.Module):
 
         # End transition score
         # shape: (batch_size,)
-        seq_ends = mask.long().sum(dim=0) - 1
+        seq_ends = mask.sum(dim=0) - 1
         # shape: (batch_size,)
         last_tags = tags[seq_ends, batch_range]
         # shape: (batch_size,)
@@ -213,7 +213,7 @@ class CRF(nn.Module):
         return score
 
     def _compute_normalizer(
-            self, emissions: torch.Tensor, mask: torch.ByteTensor) -> torch.Tensor:
+            self, emissions: torch.Tensor, mask: torch.BoolTensor) -> torch.Tensor:
         # emissions: (seq_length, batch_size, num_tags)
         # mask: (seq_length, batch_size)
         assert emissions.dim() == 3 and mask.dim() == 2
@@ -264,7 +264,7 @@ class CRF(nn.Module):
         return torch.logsumexp(score, dim=1)
 
     def _viterbi_decode(self, emissions: torch.FloatTensor,
-                        mask: torch.ByteTensor) -> List[List[int]]:
+                        mask: torch.BoolTensor) -> List[List[int]]:
         # emissions: (seq_length, batch_size, num_tags)
         # mask: (seq_length, batch_size)
         assert emissions.dim() == 3 and mask.dim() == 2
@@ -319,7 +319,7 @@ class CRF(nn.Module):
         # Now, compute the best path for each sample
 
         # shape: (batch_size,)
-        seq_ends = mask.long().sum(dim=0) - 1
+        seq_ends = mask.sum(dim=0) - 1
         best_tags_list: List[List[int]] = []
 
         for idx in range(batch_size):
