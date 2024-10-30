@@ -184,27 +184,31 @@ class CRF(nn.Module):
         seq_length, batch_size = tags.shape
         mask = mask.type_as(emissions)
 
+        tags_range = torch.arange(self.num_tags, device=tags.device)
+        batch_range = torch.arange(batch_size, device=tags.device)
+
         # Start transition score and first emission
         # shape: (batch_size,)
         score = self.start_transitions[tags[0]]
-        score += emissions[0, torch.arange(batch_size), tags[0]]
-
-        for i in range(1, seq_length):
-            # Transition score to next tag, only added if next timestep is valid (mask == 1)
-            # shape: (batch_size,)
-            score += self.transitions[tags[i - 1], tags[i]] * mask[i]
-
-            # Emission score for next tag, only added if next timestep is valid (mask == 1)
-            # shape: (batch_size,)
-            score += emissions[i, torch.arange(batch_size), tags[i]] * mask[i]
 
         # End transition score
         # shape: (batch_size,)
         seq_ends = mask.long().sum(dim=0) - 1
         # shape: (batch_size,)
-        last_tags = tags[seq_ends, torch.arange(batch_size)]
+        last_tags = tags[seq_ends, batch_range]
         # shape: (batch_size,)
         score += self.end_transitions[last_tags]
+
+        emission_scores = emissions[tags_range == tags.unsqueeze(2)]
+        emission_scores = emission_scores.view(seq_length, batch_size)
+
+        tag_transitions = tags.unfold(dimension=0, size=2, step=1).contiguous()
+        tag_transitions = tag_transitions.view((seq_length - 1) * batch_size, 2)
+        tag_from, tag_to = tag_transitions[:, 0], tag_transitions[:, 1]
+        transition_scores = self.transitions[tag_from, tag_to].view(seq_length - 1, batch_size)
+
+        emission_scores[1:, :] += transition_scores
+        score = score + (emission_scores * mask).sum(0)
 
         return score
 
